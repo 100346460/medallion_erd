@@ -1,0 +1,439 @@
+nodes:
+  - id: custome
+    name: Customer Data
+    layer: source
+    system: TenX MDM
+    owner:
+    description: Customer and account records
+    freshness: daily
+    quality_status: health
+    row_count: 1000000
+  - id: crm_accounts
+    name: CRM Accounts
+    layer: source
+    system: Salesforce
+    owner: Revenue Ops
+    description: Customer and prospect account records from the CRM.
+    freshness: Near real-time
+    quality_status: healthy
+    row_count: 184320
+    tags: [crm, customer]
+  - id: billing_invoices
+    name: Billing Invoices
+    layer: source
+    system: Stripe
+    owner: Finance Analytics
+    description: Invoice and payment events from billing.
+    freshness: Hourly
+    quality_status: healthy
+    row_count: 912044
+    tags: [billing, finance]
+  - id: app_events
+    name: Product Events
+    layer: source
+    system: Segment
+    owner: Product Analytics
+    description: Raw application events emitted by web and backend services.
+    freshness: 15 minutes
+    quality_status: warning
+    row_count: 22800412
+    tags: [product, events]
+  - id: bronze_crm_accounts
+    name: bronze_crm_accounts
+    layer: bronze
+    system: Lakehouse
+    owner: Data Platform
+    description: Append-only CRM account extract with ingestion metadata.
+    freshness: 15 minutes
+    quality_status: healthy
+    row_count: 184320
+    tags: [raw, crm]
+  - id: bronze_billing_invoices
+    name: bronze_billing_invoices
+    layer: bronze
+    system: Lakehouse
+    owner: Data Platform
+    description: Raw invoice events normalized into a landing table.
+    freshness: Hourly
+    quality_status: healthy
+    row_count: 912044
+    tags: [raw, billing]
+  - id: bronze_app_events
+    name: bronze_app_events
+    layer: bronze
+    system: Lakehouse
+    owner: Data Platform
+    description: Raw product event stream partitioned by event date.
+    freshness: 15 minutes
+    quality_status: warning
+    row_count: 22800412
+    tags: [raw, events]
+  - id: silver_accounts
+    name: silver_accounts
+    layer: silver
+    system: Lakehouse
+    owner: Data Engineering
+    description: Deduplicated account dimension with normalized firmographics.
+    freshness: Hourly
+    quality_status: healthy
+    row_count: 181904
+    tags: [clean, customer]
+  - id: silver_invoice_facts
+    name: silver_invoice_facts
+    layer: silver
+    system: Lakehouse
+    owner: Data Engineering
+    description: Clean invoice fact table with currency and status standardization.
+    freshness: Hourly
+    quality_status: healthy
+    row_count: 902118
+    tags: [clean, finance]
+  - id: silver_usage_events
+    name: silver_usage_events
+    layer: silver
+    system: Lakehouse
+    owner: Data Engineering
+    description: Bot-filtered and sessionized product usage events.
+    freshness: Hourly
+    quality_status: warning
+    row_count: 19882203
+    tags: [clean, product]
+  - id: gold_customer_360
+    name: gold_customer_360
+    layer: gold
+    system: Lakehouse
+    owner: Analytics Engineering
+    description: Account-level customer profile for analytics and reporting.
+    freshness: Daily at 06:00
+    quality_status: healthy
+    row_count: 181904
+    tags: [curated, customer]
+  - id: gold_revenue_mart
+    name: gold_revenue_mart
+    layer: gold
+    system: Lakehouse
+    owner: Analytics Engineering
+    description: Revenue metrics by account, product, and period.
+    freshness: Daily at 06:30
+    quality_status: healthy
+    row_count: 1248120
+    tags: [curated, finance]
+  - id: semantic_revenue_dashboard
+    name: Revenue Dashboard
+    layer: semantic
+    system: BI
+    owner: Finance Analytics
+    description: Executive revenue and retention metrics.
+    freshness: Daily at 07:00
+    quality_status: healthy
+    row_count: null
+    tags: [dashboard, revenue]
+  - id: semantic_customer_health
+    name: Customer Health Model
+    layer: semantic
+    system: Metrics Layer
+    owner: Customer Success Ops
+    description: Reusable health score metric definitions for account teams.
+    freshness: Daily at 07:15
+    quality_status: healthy
+    row_count: null
+    tags: [semantic, health]
+
+edges:
+  - source: crm_accounts
+    target: bronze_crm_accounts
+    transformation: ingest crm extract
+    schedule: continuous
+  - source: billing_invoices
+    target: bronze_billing_invoices
+    transformation: ingest invoice events
+    schedule: hourly
+  - source: app_events
+    target: bronze_app_events
+    transformation: stream product events
+    schedule: continuous
+  - source: bronze_crm_accounts
+    target: silver_accounts
+    transformation: dedupe and standardize
+    schedule: hourly
+  - source: bronze_billing_invoices
+    target: silver_invoice_facts
+    transformation: normalize invoices
+    schedule: hourly
+  - source: bronze_app_events
+    target: silver_usage_events
+    transformation: sessionize usage
+    schedule: hourly
+  - source: silver_accounts
+    target: gold_customer_360
+    transformation: enrich account profile
+    schedule: daily
+  - source: silver_invoice_facts
+    target: gold_revenue_mart
+    transformation: aggregate revenue facts
+    schedule: daily
+  - source: silver_usage_events
+    target: gold_customer_360
+    transformation: summarize engagement
+    schedule: daily
+  - source: silver_accounts
+    target: gold_revenue_mart
+    transformation: join account attributes
+    schedule: daily
+  - source: gold_revenue_mart
+    target: semantic_revenue_dashboard
+    transformation: publish certified metrics
+    schedule: daily
+  - source: gold_customer_360
+    target: semantic_customer_health
+    transformation: publish health features
+    schedule: daily
+  - source: gold_revenue_mart
+    target: semantic_customer_health
+    transformation: publish revenue features
+    schedule: daily
+
+erds:
+  - dataset_id: silver_accounts
+    name: Silver Accounts ERD
+    description: Normalized account, owner, and industry lookup tables used to create the silver account dimension.
+    tables:
+      - name: accounts
+        description: Deduplicated account records.
+        columns:
+          - name: account_id
+            type: string
+            primary_key: true
+            nullable: false
+          - name: owner_id
+            type: string
+            foreign_key: account_owners.owner_id
+            nullable: false
+          - name: industry_id
+            type: string
+            foreign_key: industries.industry_id
+          - name: account_name
+            type: string
+            nullable: false
+          - name: account_status
+            type: string
+          - name: created_at
+            type: timestamp
+      - name: account_owners
+        description: CRM users responsible for accounts.
+        columns:
+          - name: owner_id
+            type: string
+            primary_key: true
+            nullable: false
+          - name: owner_name
+            type: string
+            nullable: false
+          - name: team
+            type: string
+      - name: industries
+        description: Standardized industry taxonomy.
+        columns:
+          - name: industry_id
+            type: string
+            primary_key: true
+            nullable: false
+          - name: industry_name
+            type: string
+            nullable: false
+          - name: industry_group
+            type: string
+    relationships:
+      - source_table: accounts
+        source_column: owner_id
+        target_table: account_owners
+        target_column: owner_id
+        cardinality: many-to-one
+        description: Each account is assigned to one current owner.
+      - source_table: accounts
+        source_column: industry_id
+        target_table: industries
+        target_column: industry_id
+        cardinality: many-to-one
+        description: Each account maps to one standardized industry.
+  - dataset_id: silver_invoice_facts
+    name: Silver Invoice Facts ERD
+    description: Clean invoice facts connected to account and product reference tables.
+    tables:
+      - name: invoices
+        description: One row per invoice.
+        columns:
+          - name: invoice_id
+            type: string
+            primary_key: true
+            nullable: false
+          - name: account_id
+            type: string
+            foreign_key: invoice_accounts.account_id
+            nullable: false
+          - name: invoice_date
+            type: date
+            nullable: false
+          - name: invoice_status
+            type: string
+          - name: invoice_total_usd
+            type: decimal(18,2)
+      - name: invoice_lines
+        description: Line-level product and amount detail.
+        columns:
+          - name: invoice_line_id
+            type: string
+            primary_key: true
+            nullable: false
+          - name: invoice_id
+            type: string
+            foreign_key: invoices.invoice_id
+            nullable: false
+          - name: product_id
+            type: string
+            foreign_key: products.product_id
+            nullable: false
+          - name: quantity
+            type: integer
+          - name: line_amount_usd
+            type: decimal(18,2)
+      - name: invoice_accounts
+        description: Billing account reference data.
+        columns:
+          - name: account_id
+            type: string
+            primary_key: true
+            nullable: false
+          - name: billing_country
+            type: string
+          - name: tax_exempt
+            type: boolean
+      - name: products
+        description: Product catalog attributes for invoice lines.
+        columns:
+          - name: product_id
+            type: string
+            primary_key: true
+            nullable: false
+          - name: product_name
+            type: string
+            nullable: false
+          - name: product_family
+            type: string
+    relationships:
+      - source_table: invoice_lines
+        source_column: invoice_id
+        target_table: invoices
+        target_column: invoice_id
+        cardinality: many-to-one
+        description: Each invoice can contain many line items.
+      - source_table: invoices
+        source_column: account_id
+        target_table: invoice_accounts
+        target_column: account_id
+        cardinality: many-to-one
+        description: Each invoice belongs to one billing account.
+      - source_table: invoice_lines
+        source_column: product_id
+        target_table: products
+        target_column: product_id
+        cardinality: many-to-one
+        description: Each invoice line references one product.
+  - dataset_id: silver_usage_events
+    name: Silver Usage Events ERD
+    description: Sessionized product events tied to users, accounts, and event definitions.
+    tables:
+      - name: sessions
+        description: User sessions derived from event streams.
+        columns:
+          - name: session_id
+            type: string
+            primary_key: true
+            nullable: false
+          - name: user_id
+            type: string
+            foreign_key: users.user_id
+            nullable: false
+          - name: account_id
+            type: string
+            foreign_key: usage_accounts.account_id
+          - name: started_at
+            type: timestamp
+            nullable: false
+          - name: ended_at
+            type: timestamp
+      - name: events
+        description: Bot-filtered product events.
+        columns:
+          - name: event_id
+            type: string
+            primary_key: true
+            nullable: false
+          - name: session_id
+            type: string
+            foreign_key: sessions.session_id
+            nullable: false
+          - name: event_type_id
+            type: string
+            foreign_key: event_types.event_type_id
+            nullable: false
+          - name: occurred_at
+            type: timestamp
+            nullable: false
+      - name: users
+        description: Known product users.
+        columns:
+          - name: user_id
+            type: string
+            primary_key: true
+            nullable: false
+          - name: email_domain
+            type: string
+          - name: user_role
+            type: string
+      - name: usage_accounts
+        description: Account reference data for product usage.
+        columns:
+          - name: account_id
+            type: string
+            primary_key: true
+            nullable: false
+          - name: account_segment
+            type: string
+      - name: event_types
+        description: Controlled event taxonomy.
+        columns:
+          - name: event_type_id
+            type: string
+            primary_key: true
+            nullable: false
+          - name: event_name
+            type: string
+            nullable: false
+          - name: feature_area
+            type: string
+    relationships:
+      - source_table: events
+        source_column: session_id
+        target_table: sessions
+        target_column: session_id
+        cardinality: many-to-one
+        description: Each session can contain many product events.
+      - source_table: sessions
+        source_column: user_id
+        target_table: users
+        target_column: user_id
+        cardinality: many-to-one
+        description: Each session belongs to one known user.
+      - source_table: sessions
+        source_column: account_id
+        target_table: usage_accounts
+        target_column: account_id
+        cardinality: many-to-one
+        description: Sessions can be attributed to an account.
+      - source_table: events
+        source_column: event_type_id
+        target_table: event_types
+        target_column: event_type_id
+        cardinality: many-to-one
+        description: Events map to a controlled product taxonomy.
