@@ -1,4 +1,33 @@
 nodes:
+  - id: mortgages
+    name: TLS mortgages
+    layer: source
+    system: TLS
+    owner: TLS team
+    description: Mortgage data
+    freshness: daily
+    quality: healthy
+    row_count: 1000000
+  - id: bronze_mortgages
+    name: bronze_mortgages
+    layer: bronze
+    system: Azure Databricks
+    owner: Adrien's team
+    description: landing of source data
+    freshness: daily
+    quality: healthy
+    row_count: 1000000
+  - id: silver_mortgages
+    name: silver_mortgages
+    layer: silver
+    system: Azure Databricks
+    owner: Data Engineering
+    description: standardized silver mortgage data
+    freshness: daily
+    quality_status: health
+    row_count: 19882203
+    tags: [mortgages, customer]
+  
   - id: customer
     name: Customer Data
     layer: source
@@ -148,6 +177,12 @@ nodes:
     tags: [semantic, health]
 
 edges:
+  - source: mortgages
+    target: bronze_mortgages
+    transformation: ingestion from source system
+  - source: bronze_mortgages
+    target: silver_mortgages
+    transformation: basic standardization
   - source: customer
     target: bronze_customer
     transformation: ingest customer extract
