@@ -1,9 +1,9 @@
 nodes:
-  - id: custome
+  - id: customer
     name: Customer Data
     layer: source
     system: TenX MDM
-    owner:
+    owner: tenx source team
     description: Customer and account records
     freshness: daily
     quality_status: health
@@ -38,6 +38,14 @@ nodes:
     quality_status: warning
     row_count: 22800412
     tags: [product, events]
+  - id: bronze_customer
+    name: bronze_customer
+    layer: bronze
+    system: Azure
+    owner: Data Platform
+    description: Append-only customer data
+    freshness: daily
+    tags: [raw, customer]
   - id: bronze_crm_accounts
     name: bronze_crm_accounts
     layer: bronze
@@ -140,6 +148,9 @@ nodes:
     tags: [semantic, health]
 
 edges:
+  - source: customer
+    target: bronze_customer
+    transformation: ingest customer extract
   - source: crm_accounts
     target: bronze_crm_accounts
     transformation: ingest crm extract

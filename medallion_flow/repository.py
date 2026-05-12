@@ -31,33 +31,33 @@ def load_architecture(path: Path) -> Architecture:
 
 def _parse_node(item: dict[str, Any]) -> DatasetNode:
     return DatasetNode(
-        id=str(item["id"]),
-        name=str(item["name"]),
+        id=_as_string(item["id"]),
+        name=_as_string(item["name"]),
         layer=Layer(str(item["layer"]).lower()),
-        system=str(item.get("system", "")),
-        owner=str(item.get("owner", "")),
-        description=str(item.get("description", "")),
-        freshness=str(item.get("freshness", "")),
-        quality_status=str(item.get("quality_status", "unknown")),
+        system=_as_string(item.get("system", "")),
+        owner=_as_string(item.get("owner", "")),
+        description=_as_string(item.get("description", "")),
+        freshness=_as_string(item.get("freshness", "")),
+        quality_status=_as_string(item.get("quality_status", "unknown")),
         row_count=item.get("row_count"),
-        tags=tuple(str(tag) for tag in item.get("tags", [])),
+        tags=tuple(_as_string(tag) for tag in item.get("tags", [])),
     )
 
 
 def _parse_edge(item: dict[str, Any]) -> LineageEdge:
     return LineageEdge(
-        source=str(item["source"]),
-        target=str(item["target"]),
-        transformation=str(item.get("transformation", "")),
-        schedule=str(item.get("schedule", "")),
+        source=_as_string(item["source"]),
+        target=_as_string(item["target"]),
+        transformation=_as_string(item.get("transformation", "")),
+        schedule=_as_string(item.get("schedule", "")),
     )
 
 
 def _parse_erd(item: dict[str, Any]) -> DatasetErd:
     return DatasetErd(
-        dataset_id=str(item["dataset_id"]),
-        name=str(item.get("name", item["dataset_id"])),
-        description=str(item.get("description", "")),
+        dataset_id=_as_string(item["dataset_id"]),
+        name=_as_string(item.get("name", item["dataset_id"])),
+        description=_as_string(item.get("description", "")),
         tables=tuple(_parse_erd_table(table) for table in item.get("tables", [])),
         relationships=tuple(
             _parse_table_relationship(relationship)
@@ -68,31 +68,37 @@ def _parse_erd(item: dict[str, Any]) -> DatasetErd:
 
 def _parse_erd_table(item: dict[str, Any]) -> ErdTable:
     return ErdTable(
-        name=str(item["name"]),
-        description=str(item.get("description", "")),
+        name=_as_string(item["name"]),
+        description=_as_string(item.get("description", "")),
         columns=tuple(_parse_table_column(column) for column in item.get("columns", [])),
     )
 
 
 def _parse_table_column(item: dict[str, Any]) -> TableColumn:
     return TableColumn(
-        name=str(item["name"]),
-        type=str(item.get("type", "")),
+        name=_as_string(item["name"]),
+        type=_as_string(item.get("type", "")),
         nullable=bool(item.get("nullable", True)),
         primary_key=bool(item.get("primary_key", False)),
-        foreign_key=str(item.get("foreign_key", "")),
+        foreign_key=_as_string(item.get("foreign_key", "")),
     )
 
 
 def _parse_table_relationship(item: dict[str, Any]) -> TableRelationship:
     return TableRelationship(
-        source_table=str(item["source_table"]),
-        source_column=str(item["source_column"]),
-        target_table=str(item["target_table"]),
-        target_column=str(item["target_column"]),
-        cardinality=str(item.get("cardinality", "")),
-        description=str(item.get("description", "")),
+        source_table=_as_string(item["source_table"]),
+        source_column=_as_string(item["source_column"]),
+        target_table=_as_string(item["target_table"]),
+        target_column=_as_string(item["target_column"]),
+        cardinality=_as_string(item.get("cardinality", "")),
+        description=_as_string(item.get("description", "")),
     )
+
+
+def _as_string(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value)
 
 
 def _validate_references(

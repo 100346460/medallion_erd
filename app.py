@@ -20,12 +20,12 @@ st.set_page_config(
 
 
 @st.cache_data
-def get_architecture(path: str):
+def get_architecture(path: str, modified_at: float):
     return load_architecture(Path(path))
 
 
 def main() -> None:
-    architecture = get_architecture(str(DATA_PATH))
+    architecture = get_architecture(str(DATA_PATH), DATA_PATH.stat().st_mtime)
 
     st.title("Medallion Flow Visualizer")
 
@@ -75,7 +75,7 @@ def main() -> None:
             build_dot(filtered_architecture, selected_layers, erd_node_ids),
             width='stretch',
         )
-        render_silver_erd_links(filtered_architecture)
+        render_erd_links(filtered_architecture)
         render_node_inspector(filtered_architecture)
 
     with datasets_tab:
@@ -92,27 +92,35 @@ def render_scorecards(architecture) -> None:
         col.metric(layer.value.title(), count)
 
 
-def render_silver_erd_links(architecture: Architecture) -> None:
+def render_erd_links(architecture: Architecture) -> None:
     erd_lookup = architecture.erd_by_dataset_id()
-    silver_nodes = [
-        node
-        for node in architecture.nodes_for_layer(Layer.SILVER)
-        if node.id in erd_lookup
-    ]
-    if not silver_nodes:
+    erd_nodes_by_layer = {
+        layer: [
+            node
+            for node in architecture.nodes_for_layer(layer)
+            if node.id in erd_lookup
+        ]
+        for layer in LAYER_ORDER
+    }
+    if not any(erd_nodes_by_layer.values()):
         return
 
-    st.subheader("Silver ERDs")
-    cols = st.columns(min(3, len(silver_nodes)))
-    for index, node in enumerate(silver_nodes):
-        erd = erd_lookup[node.id]
-        with cols[index % len(cols)]:
-            st.link_button(
-                erd.name,
-                f"/ERD?dataset_id={node.id}",
-                width='stretch',
-            )
-            st.caption(node.description)
+    st.subheader("Dataset ERDs")
+    for layer, nodes in erd_nodes_by_layer.items():
+        if not nodes:
+            continue
+
+        st.write(f"**{layer.value.title()}**")
+        cols = st.columns(min(3, len(nodes)))
+        for index, node in enumerate(nodes):
+            erd = erd_lookup[node.id]
+            with cols[index % len(cols)]:
+                st.link_button(
+                    erd.name,
+                    f"/ERD?dataset_id={node.id}",
+                    width='stretch',
+                )
+                st.caption(node.description)
 
 
 def render_node_inspector(architecture) -> None:

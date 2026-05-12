@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from medallion_flow.erd import build_erd_dot
+from medallion_flow.models import LAYER_ORDER
 from medallion_flow.repository import load_architecture
 
 
@@ -19,15 +20,15 @@ st.set_page_config(
 
 
 @st.cache_data
-def get_architecture(path: str):
+def get_architecture(path: str, modified_at: float):
     return load_architecture(Path(path))
 
 
 def main() -> None:
-    architecture = get_architecture(str(DATA_PATH))
+    architecture = get_architecture(str(DATA_PATH), DATA_PATH.stat().st_mtime)
     erd_lookup = architecture.erd_by_dataset_id()
 
-    st.title("Silver Layer ERD")
+    st.title("Dataset ERD")
     st.link_button("Back to flow map", "/")
 
     if not erd_lookup:
@@ -35,20 +36,28 @@ def main() -> None:
         return
 
     query_dataset_id = st.query_params.get("dataset_id")
-    dataset_ids = sorted(erd_lookup)
+    node_lookup = architecture.node_by_id()
+    layer_position = {layer: index for index, layer in enumerate(LAYER_ORDER)}
+    dataset_ids = sorted(
+        erd_lookup,
+        key=lambda dataset_id: (
+            layer_position.get(node_lookup[dataset_id].layer, len(LAYER_ORDER)),
+            erd_lookup[dataset_id].name,
+        ),
+    )
     default_index = dataset_ids.index(query_dataset_id) if query_dataset_id in dataset_ids else 0
 
     selected_dataset_id = st.selectbox(
         "Dataset",
         options=dataset_ids,
         index=default_index,
-        format_func=lambda dataset_id: erd_lookup[dataset_id].name,
+        format_func=lambda dataset_id: _dataset_label(dataset_id, architecture, erd_lookup),
     )
     if selected_dataset_id != query_dataset_id:
         st.query_params["dataset_id"] = selected_dataset_id
 
     erd = erd_lookup[selected_dataset_id]
-    node = architecture.node_by_id().get(selected_dataset_id)
+    node = node_lookup.get(selected_dataset_id)
 
     if node:
         cols = st.columns([1, 1, 2])
@@ -103,6 +112,13 @@ def relationship_frame(erd) -> pd.DataFrame:
             for relationship in erd.relationships
         ]
     )
+
+
+def _dataset_label(dataset_id: str, architecture, erd_lookup) -> str:
+    node = architecture.node_by_id().get(dataset_id)
+    if not node:
+        return erd_lookup[dataset_id].name
+    return f"{node.layer.value.title()} - {erd_lookup[dataset_id].name}"
 
 
 if __name__ == "__main__":

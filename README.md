@@ -35,6 +35,6 @@ streamlit run app.py
 ## Extending It
 
 - Add or edit nodes and edges in `data/sample_architecture.yaml`.
-- Add table-level ERDs in the `erds:` section and link them to a medallion node with `dataset_id`.
+- Add table-level ERDs in the `erds:` section and link them to any medallion node with `dataset_id`.
 - Replace the YAML loader in `medallion_flow/repository.py` with metadata from dbt, Unity Catalog, OpenLineage, a warehouse information schema, or a custom API.
 - Add metric freshness, job run status, data quality checks, owners, and SLA state as new fields on `DatasetNode`.
